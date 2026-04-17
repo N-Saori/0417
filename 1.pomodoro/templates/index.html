@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🍅 ポモドーロタイマー</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="/static/js/minChart.js"></script>
+</head>
+<body>
+
+  <!-- ────────── ヘッダー ────────── -->
+  <header>
+    <div class="header-inner">
+      <h1>🍅 ポモドーロタイマー</h1>
+      <div class="user-bar">
+        <!-- レベルバッジ -->
+        <div class="level-badge" id="level-badge">
+          <span id="level-icon">⭐</span>
+          <span id="level-text">Lv.1</span>
+        </div>
+        <!-- XPバー -->
+        <div class="xp-section">
+          <div class="xp-bar-wrap">
+            <div class="xp-bar-fill" id="xp-bar-fill"></div>
+          </div>
+          <div class="xp-label" id="xp-label">0 / 100 XP</div>
+        </div>
+        <!-- ストリーク -->
+        <div class="streak-badge">
+          <span class="streak-fire">🔥</span>
+          <span id="streak-num">0</span>
+          <span class="streak-unit">日連続</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ────────── タイマーセクション ────────── -->
+    <section class="card timer-section">
+      <!-- セッション切替タブ -->
+      <div class="session-tabs" role="tablist">
+        <button class="tab-btn active" data-type="pomodoro"
+                onclick="switchSession('pomodoro')" role="tab">🍅 ポモドーロ</button>
+        <button class="tab-btn" data-type="short_break"
+                onclick="switchSession('short_break')" role="tab">☕ 短い休憩</button>
+        <button class="tab-btn" data-type="long_break"
+                onclick="switchSession('long_break')" role="tab">🌿 長い休憩</button>
+      </div>
+
+      <!-- タイマーリング -->
+      <div class="timer-wrap">
+        <svg class="timer-ring" viewBox="0 0 220 220" aria-hidden="true">
+          <circle class="ring-track" cx="110" cy="110" r="96"/>
+          <circle class="ring-progress" id="ring-progress"
+                  cx="110" cy="110" r="96"
+                  stroke-dasharray="603.19"
+                  stroke-dashoffset="0"
+                  transform="rotate(-90 110 110)"/>
+        </svg>
+        <div class="timer-inner">
+          <div class="timer-time" id="timer-time">25:00</div>
+          <div class="timer-label" id="timer-label">集中タイム</div>
+          <div class="pomo-dots" id="pomo-dots">
+            <span class="dot" id="dot-0"></span>
+            <span class="dot" id="dot-1"></span>
+            <span class="dot" id="dot-2"></span>
+            <span class="dot" id="dot-3"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- コントロール -->
+      <div class="timer-controls">
+        <button class="btn btn-primary" id="start-btn" onclick="toggleTimer()">▶ スタート</button>
+        <button class="btn btn-secondary" onclick="resetTimer()">↺ リセット</button>
+      </div>
+    </section>
+
+    <!-- ────────── バッジセクション ────────── -->
+    <section class="card badges-section">
+      <h2>🏅 実績バッジ</h2>
+      <div id="badges-grid" class="badges-grid">
+        <!-- JSで動的生成 -->
+      </div>
+    </section>
+
+    <!-- ────────── 統計セクション ────────── -->
+    <section class="card stats-section">
+      <h2>📊 統計</h2>
+
+      <!-- サマリーカード -->
+      <div class="stats-summary">
+        <div class="stat-card">
+          <div class="stat-num" id="stat-total">0</div>
+          <div class="stat-desc">合計ポモドーロ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-week">0</div>
+          <div class="stat-desc">今週</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-month">0</div>
+          <div class="stat-desc">今月</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="stat-max-streak">0</div>
+          <div class="stat-desc">最大ストリーク</div>
+        </div>
+      </div>
+
+      <!-- グラフ -->
+      <div class="charts-row">
+        <div class="chart-box">
+          <h3>今週の集中記録</h3>
+          <canvas id="weekly-chart"></canvas>
+        </div>
+        <div class="chart-box">
+          <h3>月間トレンド（週別）</h3>
+          <canvas id="monthly-chart"></canvas>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ────────── 通知トースト ────────── -->
+  <div id="toast" class="toast hidden" role="alert" aria-live="assertive">
+    <div class="toast-icon" id="toast-icon"></div>
+    <div class="toast-body">
+      <div class="toast-title" id="toast-title"></div>
+      <div class="toast-msg"   id="toast-msg"></div>
+    </div>
+  </div>
+
+  <script src="/static/js/timer.js"></script>
+</body>
+</html>
