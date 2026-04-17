@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ポモドーロタイマー - パターンA</title>
+  <style>
+    /* ===== リセット & ベース ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      background: #0d0d1a;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ===== パーティクル Canvas ===== */
+    #particle-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    #particle-canvas.active { opacity: 1; }
+
+    /* ===== 波紋レイヤー ===== */
+    #ripple-layer {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      border: 2px solid rgba(100, 200, 255, 0.4);
+      transform: translate(-50%, -50%) scale(0);
+      animation: ripple-expand 4s ease-out infinite;
+    }
+    @keyframes ripple-expand {
+      0%   { transform: translate(-50%, -50%) scale(0);  opacity: 0.7; }
+      100% { transform: translate(-50%, -50%) scale(8);  opacity: 0; }
+    }
+
+    /* ===== メインコンテナ ===== */
+    .container {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+    }
+
+    /* ===== タイトル ===== */
+    h1 {
+      font-size: 1.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.85);
+      text-shadow: 0 0 20px rgba(100,200,255,0.5);
+    }
+
+    /* ===== モード切替ボタン ===== */
+    .mode-tabs {
+      display: flex;
+      gap: 8px;
+      background: rgba(255,255,255,0.07);
+      padding: 6px;
+      border-radius: 50px;
+    }
+    .mode-tab {
+      padding: 8px 22px;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: transparent;
+      color: rgba(255,255,255,0.5);
+      transition: all 0.3s ease;
+    }
+    .mode-tab.active {
+      background: rgba(100,200,255,0.25);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(100,200,255,0.3);
+    }
+
+    /* ===== 円形プログレスバーWrapper ===== */
+    .timer-wrapper {
+      position: relative;
+      width: 260px;
+      height: 260px;
+    }
+
+    /* SVG プログレスリング */
+    .progress-ring {
+      transform: rotate(-90deg);
+      filter: drop-shadow(0 0 12px var(--ring-color, #4ac8ff));
+      transition: filter 0.5s ease;
+    }
+    .progress-ring__track {
+      fill: none;
+      stroke: rgba(255,255,255,0.08);
+      stroke-width: 14;
+    }
+    .progress-ring__bar {
+      fill: none;
+      stroke: var(--ring-color, #4ac8ff);
+      stroke-width: 14;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1s linear, stroke 0.5s ease;
+    }
+
+    /* 内側の時刻表示 */
+    .timer-display {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .timer-time {
+      font-size: 3.4rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #fff;
+      text-shadow: 0 0 24px var(--ring-color, #4ac8ff);
+      transition: text-shadow 0.5s ease;
+    }
+    .timer-label {
+      font-size: 0.75rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.45);
+    }
+
+    /* ===== コントロールボタン ===== */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .btn {
+      border: none;
+      cursor: pointer;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s ease, box-shadow 0.3s ease;
+    }
+    .btn:hover  { transform: scale(1.08); }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-main {
+      width: 72px;
+      height: 72px;
+      background: linear-gradient(135deg, #4ac8ff, #3a8fff);
+      box-shadow: 0 4px 24px rgba(74,200,255,0.45);
+      font-size: 1.8rem;
+    }
+    .btn-main.running {
+      background: linear-gradient(135deg, #ff6b6b, #ff4040);
+      box-shadow: 0 4px 24px rgba(255,80,80,0.45);
+    }
+    .btn-sub {
+      width: 50px;
+      height: 50px;
+      background: rgba(255,255,255,0.1);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+      font-size: 1.2rem;
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* ===== セッションドット ===== */
+    .session-dots {
+      display: flex;
+      gap: 10px;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.2);
+      transition: background 0.4s ease, box-shadow 0.4s ease;
+    }
+    .dot.done {
+      background: #4ac8ff;
+      box-shadow: 0 0 8px rgba(74,200,255,0.6);
+    }
+
+    /* ===== 通知トースト ===== */
+    .toast {
+      position: fixed;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      padding: 14px 28px;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      opacity: 0;
+      transition: transform 0.4s cubic-bezier(.34,1.56,.64,1), opacity 0.4s ease;
+      z-index: 100;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ===== 色変数の定義（JSで切り替え）===== */
+    :root {
+      --ring-color: #4ac8ff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- パーティクル Canvas -->
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- 波紋レイヤー -->
+  <div id="ripple-layer"></div>
+
+  <!-- メイン UI -->
+  <div class="container">
+    <h1>🍅 ポモドーロタイマー</h1>
+
+    <!-- モード切替 -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="focus">集中 25分</button>
+      <button class="mode-tab" data-mode="short">小休憩 5分</button>
+      <button class="mode-tab" data-mode="long">長休憩 15分</button>
+    </div>
+
+    <!-- 円形プログレスバー -->
+    <div class="timer-wrapper">
+      <svg class="progress-ring" width="260" height="260" viewBox="0 0 260 260">
+        <circle class="progress-ring__track" cx="130" cy="130" r="110"/>
+        <circle id="progress-bar" class="progress-ring__bar" cx="130" cy="130" r="110"/>
+      </svg>
+      <div class="timer-display">
+        <span class="timer-time" id="timer-time">25:00</span>
+        <span class="timer-label" id="timer-label">集中タイム</span>
+      </div>
+    </div>
+
+    <!-- コントロール -->
+    <div class="controls">
+      <button class="btn btn-sub" id="btn-reset" title="リセット">↺</button>
+      <button class="btn btn-main" id="btn-start">▶</button>
+      <button class="btn btn-sub" id="btn-skip" title="スキップ">⏭</button>
+    </div>
+
+    <!-- セッションドット -->
+    <div class="session-dots" id="session-dots">
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+      <div class="dot"></div>
+    </div>
+  </div>
+
+  <!-- トースト通知 -->
+  <div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================
+   定数・設定
+===================================================== */
+const MODES = {
+  focus: { label: '集中タイム',  seconds: 25 * 60 },
+  short: { label: '小休憩',      seconds:  5 * 60 },
+  long:  { label: '長休憩',      seconds: 15 * 60 },
+};
+
+/* 色テーブル (残り時間割合 1.0→0.0 に対して青→黄→赤) */
+const COLOR_STOPS = [
+  { t: 1.00, r: 74,  g: 200, b: 255 }, // 青  #4ac8ff
+  { t: 0.60, r: 74,  g: 200, b: 255 }, // 青  (60%まで維持)
+  { t: 0.35, r: 255, g: 230, b:  50 }, // 黄  #ffe632
+  { t: 0.10, r: 255, g:  80, b:  50 }, // 赤  #ff5032
+  { t: 0.00, r: 255, g:  40, b:  40 }, // 深赤
+];
+
+/* =====================================================
+   状態
+===================================================== */
+let currentMode   = 'focus';
+let totalSeconds  = MODES.focus.seconds;
+let remainSeconds = MODES.focus.seconds;
+let running       = false;
+let timerId       = null;
+let completedSessions = 0;
+
+/* =====================================================
+   DOM 参照
+===================================================== */
+const progressBar   = document.getElementById('progress-bar');
+const timerTime     = document.getElementById('timer-time');
+const timerLabel    = document.getElementById('timer-label');
+const btnStart      = document.getElementById('btn-start');
+const btnReset      = document.getElementById('btn-reset');
+const btnSkip       = document.getElementById('btn-skip');
+const sessionDots   = document.getElementById('session-dots');
+const toastEl       = document.getElementById('toast');
+const canvas        = document.getElementById('particle-canvas');
+const rippleLayer   = document.getElementById('ripple-layer');
+
+/* =====================================================
+   SVG 円周計算
+===================================================== */
+const RADIUS = 110;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+progressBar.style.strokeDasharray  = CIRCUMFERENCE;
+progressBar.style.strokeDashoffset = 0;
+
+/* =====================================================
+   色補間ユーティリティ
+===================================================== */
+function interpolateColor(ratio) {
+  // ratio: 1.0 = 開始, 0.0 = 終了
+  for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
+    const a = COLOR_STOPS[i];
+    const b = COLOR_STOPS[i + 1];
+    if (ratio <= a.t && ratio >= b.t) {
+      const span = a.t - b.t;
+      const f    = span === 0 ? 0 : (ratio - b.t) / span;
+      return {
+        r: Math.round(b.r + (a.r - b.r) * f),
+        g: Math.round(b.g + (a.g - b.g) * f),
+        b: Math.round(b.b + (a.b - b.b) * f),
+      };
+    }
+  }
+  const last = COLOR_STOPS[COLOR_STOPS.length - 1];
+  return { r: last.r, g: last.g, b: last.b };
+}
+
+function applyColor(ratio) {
+  const { r, g, b } = interpolateColor(ratio);
+  const hex = '#' +
+    r.toString(16).padStart(2, '0') +
+    g.toString(16).padStart(2, '0') +
+    b.toString(16).padStart(2, '0');
+  document.documentElement.style.setProperty('--ring-color', hex);
+  progressBar.style.stroke = hex;
+  timerTime.style.textShadow = `0 0 24px rgba(${r},${g},${b},0.9)`;
+  progressBar.parentElement.style.filter =
+    `drop-shadow(0 0 14px rgba(${r},${g},${b},0.7))`;
+}
+
+/* =====================================================
+   プログレスバー更新
+===================================================== */
+function updateProgress() {
+  const ratio  = totalSeconds > 0 ? remainSeconds / totalSeconds : 0;
+  const offset = CIRCUMFERENCE * (1 - ratio);
+  progressBar.style.strokeDashoffset = offset;
+  applyColor(ratio);
+}
+
+/* =====================================================
+   時刻フォーマット
+===================================================== */
+function formatTime(sec) {
+  const m = String(Math.floor(sec / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+/* =====================================================
+   表示更新
+===================================================== */
+function render() {
+  timerTime.textContent  = formatTime(remainSeconds);
+  timerLabel.textContent = MODES[currentMode].label;
+  updateProgress();
+}
+
+/* =====================================================
+   セッションドット更新
+===================================================== */
+function updateDots() {
+  document.querySelectorAll('.dot').forEach((dot, i) => {
+    dot.classList.toggle('done', i < completedSessions % 4);
+  });
+}
+
+/* =====================================================
+   トースト表示
+===================================================== */
+let toastTimer = null;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3000);
+}
+
+/* =====================================================
+   タイマー制御
+===================================================== */
+function startTimer() {
+  if (running) return;
+  running = true;
+  btnStart.classList.add('running');
+  btnStart.textContent = '⏸';
+  if (currentMode === 'focus') {
+    canvas.classList.add('active');
+    startRipples();
+  }
+  timerId = setInterval(() => {
+    remainSeconds--;
+    render();
+    if (remainSeconds <= 0) {
+      clearInterval(timerId);
+      running = false;
+      btnStart.classList.remove('running');
+      btnStart.textContent = '▶';
+      onComplete();
+    }
+  }, 1000);
+}
+
+function pauseTimer() {
+  clearInterval(timerId);
+  running = false;
+  btnStart.classList.remove('running');
+  btnStart.textContent = '▶';
+}
+
+function resetTimer() {
+  pauseTimer();
+  remainSeconds = totalSeconds;
+  canvas.classList.remove('active');
+  stopRipples();
+  render();
+}
+
+function skipTimer() {
+  pauseTimer();
+  onComplete();
+}
+
+function onComplete() {
+  canvas.classList.remove('active');
+  stopRipples();
+  if (currentMode === 'focus') {
+    completedSessions++;
+    updateDots();
+    showToast('🎉 集中タイム終了！休憩しましょう');
+    switchMode(completedSessions % 4 === 0 ? 'long' : 'short');
+  } else {
+    showToast('☕ 休憩終了！集中タイムを始めましょう');
+    switchMode('focus');
+  }
+}
+
+function switchMode(mode) {
+  currentMode   = mode;
+  totalSeconds  = MODES[mode].seconds;
+  remainSeconds = MODES[mode].seconds;
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.mode === mode);
+  });
+  render();
+}
+
+/* =====================================================
+   ボタンイベント
+===================================================== */
+btnStart.addEventListener('click', () => running ? pauseTimer() : startTimer());
+btnReset.addEventListener('click', resetTimer);
+btnSkip.addEventListener('click',  skipTimer);
+
+document.querySelectorAll('.mode-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (running) pauseTimer();
+    switchMode(tab.dataset.mode);
+  });
+});
+
+/* =====================================================
+   波紋エフェクト
+===================================================== */
+const MAX_RIPPLES = 5;
+let rippleElements = [];
+let rippleIntervalId = null;
+
+function createRipple() {
+  const el = document.createElement('div');
+  el.className = 'ripple';
+  const size = 60 + Math.random() * 80;
+  el.style.width  = size + 'px';
+  el.style.height = size + 'px';
+  el.style.left = (20 + Math.random() * 60) + '%';
+  el.style.top  = (20 + Math.random() * 60) + '%';
+  const duration = 3 + Math.random() * 3;
+  el.style.animationDuration = duration + 's';
+  el.style.animationDelay    = (Math.random() * 2) + 's';
+  // 現在の色を使用
+  const color = getComputedStyle(document.documentElement)
+    .getPropertyValue('--ring-color').trim();
+  el.style.borderColor = color + '66';
+  rippleLayer.appendChild(el);
+  rippleElements.push(el);
+  if (rippleElements.length > MAX_RIPPLES * 2) {
+    const old = rippleElements.shift();
+    old.remove();
+  }
+}
+
+function startRipples() {
+  createRipple();
+  rippleIntervalId = setInterval(createRipple, 1800);
+}
+
+function stopRipples() {
+  clearInterval(rippleIntervalId);
+  rippleElements.forEach(el => el.remove());
+  rippleElements = [];
+}
+
+/* =====================================================
+   パーティクルエフェクト
+===================================================== */
+const ctx = canvas.getContext('2d');
+let particles = [];
+let animFrameId = null;
+
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+class Particle {
+  constructor() { this.reset(); }
+  reset() {
+    this.x    = Math.random() * canvas.width;
+    this.y    = canvas.height + 20;
+    this.vx   = (Math.random() - 0.5) * 0.8;
+    this.vy   = -(0.4 + Math.random() * 1.2);
+    this.size = 1.5 + Math.random() * 3;
+    this.life = 0;
+    this.maxLife = 180 + Math.random() * 120;
+    const color = getComputedStyle(document.documentElement)
+      .getPropertyValue('--ring-color').trim();
+    this.color = color;
+  }
+  update() {
+    this.x    += this.vx;
+    this.y    += this.vy;
+    this.vy   -= 0.003; // 浮力
+    this.life++;
+    if (this.life > this.maxLife || this.y < -20) this.reset();
+  }
+  draw(ctx) {
+    const alpha = Math.sin((this.life / this.maxLife) * Math.PI) * 0.7;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fillStyle = this.color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+    ctx.fill();
+  }
+}
+
+// 初期パーティクル生成
+for (let i = 0; i < 120; i++) {
+  const p = new Particle();
+  p.life = Math.floor(Math.random() * p.maxLife); // ランダム位相
+  particles.push(p);
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles.forEach(p => { p.update(); p.draw(ctx); });
+  animFrameId = requestAnimationFrame(animateParticles);
+}
+animateParticles(); // 常時アニメーション（canvas は opacity で制御）
+
+/* =====================================================
+   初期描画
+===================================================== */
+render();
+updateDots();
+</script>
+</body>
+</html>
