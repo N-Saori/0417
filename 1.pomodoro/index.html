@@ -335,20 +335,39 @@ progressBar.style.strokeDasharray  = CIRCUMFERENCE;
 progressBar.style.strokeDashoffset = 0;
 
 /* =====================================================
+   色ユーティリティ
+===================================================== */
+/** RGB値を2桁の16進数文字列に変換する（0〜255 の範囲にクランプ） */
+function componentToHex(component) {
+  const clamped = Math.max(0, Math.min(255, Math.round(component)));
+  return clamped.toString(16).padStart(2, '0');
+}
+
+/** RGB値を #rrggbb 形式の16進数カラーコードに変換する */
+function rgbToHex(r, g, b) {
+  return '#' + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}
+
+/** 0〜1 のアルファ値を2桁の16進数文字列に変換する */
+function alphaToHex(alpha) {
+  return Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
+
+/* =====================================================
    色補間ユーティリティ
 ===================================================== */
 function interpolateColor(ratio) {
   // ratio: 1.0 = 開始, 0.0 = 終了
   for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
-    const a = COLOR_STOPS[i];
-    const b = COLOR_STOPS[i + 1];
-    if (ratio <= a.t && ratio >= b.t) {
-      const span = a.t - b.t;
-      const f    = span === 0 ? 0 : (ratio - b.t) / span;
+    const currentStop        = COLOR_STOPS[i];
+    const nextStop           = COLOR_STOPS[i + 1];
+    if (ratio <= currentStop.t && ratio >= nextStop.t) {
+      const span                = currentStop.t - nextStop.t;
+      const interpolationFactor = span === 0 ? 0 : (ratio - nextStop.t) / span;
       return {
-        r: Math.round(b.r + (a.r - b.r) * f),
-        g: Math.round(b.g + (a.g - b.g) * f),
-        b: Math.round(b.b + (a.b - b.b) * f),
+        r: Math.round(nextStop.r + (currentStop.r - nextStop.r) * interpolationFactor),
+        g: Math.round(nextStop.g + (currentStop.g - nextStop.g) * interpolationFactor),
+        b: Math.round(nextStop.b + (currentStop.b - nextStop.b) * interpolationFactor),
       };
     }
   }
@@ -358,10 +377,7 @@ function interpolateColor(ratio) {
 
 function applyColor(ratio) {
   const { r, g, b } = interpolateColor(ratio);
-  const hex = '#' +
-    r.toString(16).padStart(2, '0') +
-    g.toString(16).padStart(2, '0') +
-    b.toString(16).padStart(2, '0');
+  const hex = rgbToHex(r, g, b);
   document.documentElement.style.setProperty('--ring-color', hex);
   progressBar.style.stroke = hex;
   timerTime.style.textShadow = `0 0 24px rgba(${r},${g},${b},0.9)`;
@@ -500,9 +516,10 @@ document.querySelectorAll('.mode-tab').forEach(tab => {
   });
 });
 
-/* =====================================================
-   波紋エフェクト
-===================================================== */
+/* 波紋の境界色アルファ値（約40%の不透明度） */
+const RIPPLE_ALPHA_HEX = alphaToHex(0.4);
+
+
 const MAX_RIPPLES = 5;
 let rippleElements = [];
 let rippleIntervalId = null;
@@ -521,7 +538,7 @@ function createRipple() {
   // 現在の色を使用
   const color = getComputedStyle(document.documentElement)
     .getPropertyValue('--ring-color').trim();
-  el.style.borderColor = color + '66';
+  el.style.borderColor = color + RIPPLE_ALPHA_HEX;
   rippleLayer.appendChild(el);
   rippleElements.push(el);
   if (rippleElements.length > MAX_RIPPLES * 2) {
@@ -580,21 +597,21 @@ class Particle {
     const alpha = Math.sin((this.life / this.maxLife) * Math.PI) * 0.7;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-    ctx.fillStyle = this.color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+    ctx.fillStyle = this.color + alphaToHex(alpha);
     ctx.fill();
   }
 }
 
 // 初期パーティクル生成
 for (let i = 0; i < 120; i++) {
-  const p = new Particle();
-  p.life = Math.floor(Math.random() * p.maxLife); // ランダム位相
-  particles.push(p);
+  const particle = new Particle();
+  particle.life = Math.floor(Math.random() * particle.maxLife); // ランダム位相
+  particles.push(particle);
 }
 
 function animateParticles() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  particles.forEach(p => { p.update(); p.draw(ctx); });
+  particles.forEach(particle => { particle.update(); particle.draw(ctx); });
   animFrameId = requestAnimationFrame(animateParticles);
 }
 animateParticles(); // 常時アニメーション（canvas は opacity で制御）

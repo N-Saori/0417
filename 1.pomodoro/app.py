@@ -25,8 +25,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
 
-    def log_message(self, format, *args):  # noqa: A002
-        print(f"[{self.address_string()}] {format % args}")
+    def log_message(self, fmt, *args):
+        print(f"[{self.address_string()}] {fmt % args}")
 
 
 if __name__ == "__main__":
