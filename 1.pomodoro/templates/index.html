@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ポモドーロタイマー</title>
+  <style>
+    /* ===== CSS変数（テーマ） ===== */
+    :root {
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --primary: #e53935;
+      --primary-light: #ff6f60;
+      --text: #212121;
+      --text-secondary: #757575;
+      --border: #e0e0e0;
+      --shadow: 0 4px 20px rgba(0,0,0,0.12);
+      --btn-bg: #e53935;
+      --btn-text: #ffffff;
+      --radius: 16px;
+      --font: 'Segoe UI', 'Hiragino Sans', sans-serif;
+    }
+
+    [data-theme="dark"] {
+      --bg: #121212;
+      --surface: #1e1e1e;
+      --primary: #ef5350;
+      --primary-light: #ff867c;
+      --text: #e0e0e0;
+      --text-secondary: #9e9e9e;
+      --border: #333333;
+      --shadow: 0 4px 20px rgba(0,0,0,0.5);
+      --btn-bg: #ef5350;
+      --btn-text: #ffffff;
+    }
+
+    [data-theme="focus"] {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --primary: #e94560;
+      --primary-light: #ff6b81;
+      --text: #eaeaea;
+      --text-secondary: #a0a0b0;
+      --border: #0f3460;
+      --shadow: 0 4px 24px rgba(233,69,96,0.15);
+      --btn-bg: #e94560;
+      --btn-text: #ffffff;
+      --radius: 4px;
+    }
+
+    /* ===== リセット・基本 ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.35s, color 0.35s;
+      padding: 24px 16px;
+    }
+
+    /* ===== カード ===== */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 480px;
+      transition: background 0.35s, box-shadow 0.35s;
+    }
+
+    [data-theme="focus"] .card {
+      border: 1px solid var(--border);
+    }
+
+    /* ===== タイトル ===== */
+    h1 {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--primary);
+      margin-bottom: 28px;
+    }
+
+    [data-theme="focus"] h1 {
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-size: 1.1rem;
+    }
+
+    /* ===== モードタブ ===== */
+    .mode-tabs {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .mode-tab {
+      padding: 6px 18px;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    [data-theme="focus"] .mode-tab {
+      border-radius: var(--radius);
+    }
+
+    /* ===== タイマー表示 ===== */
+    .timer-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 12px 0 28px;
+    }
+
+    .timer-ring {
+      transform: rotate(-90deg);
+    }
+
+    .timer-ring-bg {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 8;
+    }
+
+    .timer-ring-progress {
+      fill: none;
+      stroke: var(--primary);
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.9s linear;
+    }
+
+    .timer-display {
+      position: absolute;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .timer-digits {
+      font-size: 3.2rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    [data-theme="focus"] .timer-digits {
+      font-size: 2.8rem;
+      letter-spacing: 0.1em;
+      font-weight: 300;
+    }
+
+    .timer-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* ===== コントロールボタン ===== */
+    .controls {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 28px;
+    }
+
+    .btn {
+      padding: 10px 28px;
+      border-radius: 999px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--btn-bg);
+      color: var(--btn-text);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn-primary:active { filter: brightness(0.95); transform: translateY(0); }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1.5px solid var(--border);
+    }
+
+    .btn-secondary:hover { background: var(--border); color: var(--text); }
+
+    [data-theme="focus"] .btn {
+      border-radius: var(--radius);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+    }
+
+    /* ===== 設定セクション ===== */
+    .settings {
+      border-top: 1px solid var(--border);
+      padding-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .setting-label {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      min-width: 110px;
+    }
+
+    /* ===== セグメントボタン ===== */
+    .seg-group {
+      display: flex;
+      gap: 4px;
+    }
+
+    .seg-btn {
+      padding: 5px 12px;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+
+    .seg-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    [data-theme="focus"] .seg-btn {
+      border-radius: var(--radius);
+    }
+
+    /* ===== トグルスイッチ ===== */
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle-input { display: none; }
+
+    .toggle-track {
+      width: 36px;
+      height: 20px;
+      background: var(--border);
+      border-radius: 999px;
+      position: relative;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .toggle-input:checked + .toggle-track {
+      background: var(--primary);
+    }
+
+    .toggle-input:checked + .toggle-track::after {
+      transform: translateX(16px);
+    }
+
+    /* ===== テーマボタン ===== */
+    .theme-seg .seg-btn {
+      font-size: 0.75rem;
+      padding: 5px 10px;
+    }
+
+    /* ===== サウンドグループ ===== */
+    .sound-toggles {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* ===== セッションカウント ===== */
+    .session-info {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+
+    .tomato-icons span { font-size: 1rem; }
+
+    /* ===== フォーカスモードのミニマル調整 ===== */
+    [data-theme="focus"] .settings {
+      gap: 14px;
+    }
+
+    [data-theme="focus"] .setting-label {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.75rem;
+    }
+
+    /* ===== 通知バナー ===== */
+    .toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      font-size: 0.9rem;
+      transition: transform 0.3s ease;
+      z-index: 100;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🍅 ポモドーロタイマー</h1>
+
+    <!-- モードタブ -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="work">作業</button>
+      <button class="mode-tab" data-mode="short">短い休憩</button>
+      <button class="mode-tab" data-mode="long">長い休憩</button>
+    </div>
+
+    <!-- セッション情報 -->
+    <div class="session-info">
+      セッション <span id="session-count">1</span> &nbsp;
+      <span class="tomato-icons" id="tomato-icons"></span>
+    </div>
+
+    <!-- タイマーリング -->
+    <div class="timer-wrap">
+      <svg class="timer-ring" width="200" height="200" viewBox="0 0 200 200">
+        <circle class="timer-ring-bg" cx="100" cy="100" r="88" />
+        <circle class="timer-ring-progress" id="ring-progress" cx="100" cy="100" r="88" />
+      </svg>
+      <div class="timer-display">
+        <div class="timer-digits" id="timer-display">25:00</div>
+        <div class="timer-label" id="timer-mode-label">作業時間</div>
+      </div>
+    </div>
+
+    <!-- コントロール -->
+    <div class="controls">
+      <button class="btn btn-primary" id="start-btn">▶ 開始</button>
+      <button class="btn btn-secondary" id="reset-btn">↺ リセット</button>
+    </div>
+
+    <!-- 設定 -->
+    <div class="settings">
+
+      <!-- 作業時間 -->
+      <div class="setting-row">
+        <span class="setting-label">⏱ 作業時間</span>
+        <div class="seg-group" id="work-time-group">
+          <button class="seg-btn" data-val="15">15分</button>
+          <button class="seg-btn active" data-val="25">25分</button>
+          <button class="seg-btn" data-val="35">35分</button>
+          <button class="seg-btn" data-val="45">45分</button>
+        </div>
+      </div>
+
+      <!-- 休憩時間 -->
+      <div class="setting-row">
+        <span class="setting-label">☕ 休憩時間</span>
+        <div class="seg-group" id="break-time-group">
+          <button class="seg-btn active" data-val="5">5分</button>
+          <button class="seg-btn" data-val="10">10分</button>
+          <button class="seg-btn" data-val="15">15分</button>
+        </div>
+      </div>
+
+      <!-- テーマ -->
+      <div class="setting-row">
+        <span class="setting-label">🎨 テーマ</span>
+        <div class="seg-group theme-seg" id="theme-group">
+          <button class="seg-btn active" data-val="light">ライト</button>
+          <button class="seg-btn" data-val="dark">ダーク</button>
+          <button class="seg-btn" data-val="focus">フォーカス</button>
+        </div>
+      </div>
+
+      <!-- サウンド -->
+      <div class="setting-row">
+        <span class="setting-label">🔊 サウンド</span>
+        <div class="sound-toggles">
+          <label class="toggle-label">
+            <input type="checkbox" class="toggle-input" id="sound-start" checked />
+            <span class="toggle-track"></span>
+            開始音
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" class="toggle-input" id="sound-end" checked />
+            <span class="toggle-track"></span>
+            終了音
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" class="toggle-input" id="sound-tick" />
+            <span class="toggle-track"></span>
+            Tick音
+          </label>
+        </div>
+      </div>
+
+    </div><!-- /settings -->
+  </div><!-- /card -->
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ===== 状態 =====
+    const state = {
+      mode: 'work',          // 'work' | 'short' | 'long'
+      running: false,
+      intervalId: null,
+      totalSeconds: 25 * 60,
+      remainingSeconds: 25 * 60,
+      workMinutes: 25,
+      shortBreakMinutes: 5,
+      longBreakMinutes: 15,
+      sessionCount: 1,
+      completedSessions: 0,
+      theme: 'light',
+      sound: { start: true, end: true, tick: false },
+    };
+
+    // ===== DOM参照 =====
+    const timerDisplay   = document.getElementById('timer-display');
+    const timerModeLabel = document.getElementById('timer-mode-label');
+    const startBtn       = document.getElementById('start-btn');
+    const resetBtn       = document.getElementById('reset-btn');
+    const sessionCountEl = document.getElementById('session-count');
+    const tomatoIconsEl  = document.getElementById('tomato-icons');
+    const ringProgress   = document.getElementById('ring-progress');
+    const toast          = document.getElementById('toast');
+
+    const CIRCUMFERENCE = 2 * Math.PI * 88; // r=88
+    ringProgress.style.strokeDasharray = CIRCUMFERENCE;
+
+    // ===== AudioContext (Web Audio API) =====
+    let audioCtx = null;
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+
+    function playBeep(frequency = 880, duration = 0.15, type = 'sine', volume = 0.4) {
+      try {
+        const ctx = getAudioCtx();
+        const oscillator = ctx.createOscillator();
+        const gainNode   = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
+        gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + duration);
+      } catch(e) { /* ignore */ }
+    }
+
+    function playStartSound() {
+      if (!state.sound.start) return;
+      playBeep(660, 0.12, 'sine', 0.35);
+      setTimeout(() => playBeep(880, 0.12, 'sine', 0.35), 130);
+    }
+
+    function playEndSound() {
+      if (!state.sound.end) return;
+      playBeep(880, 0.18, 'sine', 0.45);
+      setTimeout(() => playBeep(1100, 0.18, 'sine', 0.45), 200);
+      setTimeout(() => playBeep(1320, 0.3,  'sine', 0.45), 400);
+    }
+
+    function playTickSound() {
+      if (!state.sound.tick) return;
+      playBeep(1800, 0.04, 'square', 0.08);
+    }
+
+    // ===== タイマー表示 =====
+    function formatTime(sec) {
+      const m = String(Math.floor(sec / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateDisplay() {
+      timerDisplay.textContent = formatTime(state.remainingSeconds);
+
+      const fraction = state.remainingSeconds / state.totalSeconds;
+      const offset   = CIRCUMFERENCE * (1 - fraction);
+      ringProgress.style.strokeDashoffset = offset;
+
+      const labels = { work: '作業時間', short: '短い休憩', long: '長い休憩' };
+      timerModeLabel.textContent = labels[state.mode];
+    }
+
+    // ===== セッションアイコン =====
+    function updateSessionIcons() {
+      sessionCountEl.textContent = state.sessionCount;
+      tomatoIconsEl.innerHTML = Array.from({ length: state.completedSessions }, () => '<span>🍅</span>').join('');
+    }
+
+    // ===== モード切り替え =====
+    function getMinutesForMode(mode) {
+      if (mode === 'work')  return state.workMinutes;
+      if (mode === 'short') return state.shortBreakMinutes;
+      return state.longBreakMinutes;
+    }
+
+    function setMode(mode) {
+      stopTimer();
+      state.mode = mode;
+      const mins = getMinutesForMode(mode);
+      state.totalSeconds    = mins * 60;
+      state.remainingSeconds = mins * 60;
+
+      document.querySelectorAll('.mode-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.mode === mode);
+      });
+      startBtn.textContent = '▶ 開始';
+      updateDisplay();
+    }
+
+    // ===== タイマー制御 =====
+    function startTimer() {
+      if (state.running) return;
+      state.running = true;
+      startBtn.textContent = '⏸ 一時停止';
+      playStartSound();
+
+      state.intervalId = setInterval(() => {
+        playTickSound();
+        state.remainingSeconds--;
+        updateDisplay();
+
+        if (state.remainingSeconds <= 0) {
+          clearInterval(state.intervalId);
+          state.running = false;
+          startBtn.textContent = '▶ 開始';
+          onTimerEnd();
+        }
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      if (!state.running) return;
+      clearInterval(state.intervalId);
+      state.running = false;
+      startBtn.textContent = '▶ 再開';
+    }
+
+    function stopTimer() {
+      clearInterval(state.intervalId);
+      state.running = false;
+    }
+
+    function resetTimer() {
+      stopTimer();
+      const mins = getMinutesForMode(state.mode);
+      state.totalSeconds     = mins * 60;
+      state.remainingSeconds = mins * 60;
+      startBtn.textContent = '▶ 開始';
+      updateDisplay();
+    }
+
+    function onTimerEnd() {
+      playEndSound();
+      if (state.mode === 'work') {
+        state.completedSessions++;
+        updateSessionIcons();
+        showToast('作業終了！休憩しましょう 🎉');
+        // 4セッションごとに長い休憩を提案
+        if (state.completedSessions % 4 === 0) {
+          setMode('long');
+        } else {
+          setMode('short');
+        }
+      } else {
+        state.sessionCount++;
+        updateSessionIcons();
+        showToast('休憩終了！作業を再開しましょう 💪');
+        setMode('work');
+      }
+    }
+
+    // ===== トースト通知 =====
+    let toastTimer = null;
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
+    }
+
+    // ===== セグメントグループ共通処理 =====
+    function bindSegGroup(groupId, onChange) {
+      document.getElementById(groupId).addEventListener('click', e => {
+        const btn = e.target.closest('.seg-btn');
+        if (!btn) return;
+        document.querySelectorAll(`#${groupId} .seg-btn`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        onChange(btn.dataset.val);
+      });
+    }
+
+    // ===== 作業時間の変更 =====
+    bindSegGroup('work-time-group', val => {
+      state.workMinutes = parseInt(val);
+      if (state.mode === 'work') resetTimer();
+    });
+
+    // ===== 休憩時間の変更 =====
+    bindSegGroup('break-time-group', val => {
+      state.shortBreakMinutes = parseInt(val);
+      state.longBreakMinutes  = parseInt(val) * 3;
+      if (state.mode === 'short' || state.mode === 'long') resetTimer();
+    });
+
+    // ===== テーマの変更 =====
+    bindSegGroup('theme-group', val => {
+      state.theme = val;
+      document.documentElement.setAttribute('data-theme', val === 'light' ? '' : val);
+    });
+
+    // ===== サウンドトグル =====
+    document.getElementById('sound-start').addEventListener('change', e => {
+      state.sound.start = e.target.checked;
+    });
+    document.getElementById('sound-end').addEventListener('change', e => {
+      state.sound.end = e.target.checked;
+    });
+    document.getElementById('sound-tick').addEventListener('change', e => {
+      state.sound.tick = e.target.checked;
+    });
+
+    // ===== モードタブ =====
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+      tab.addEventListener('click', () => setMode(tab.dataset.mode));
+    });
+
+    // ===== 開始/一時停止ボタン =====
+    startBtn.addEventListener('click', () => {
+      if (state.running) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    });
+
+    // ===== リセットボタン =====
+    resetBtn.addEventListener('click', () => resetTimer());
+
+    // ===== 初期化 =====
+    updateDisplay();
+    updateSessionIcons();
+  </script>
+</body>
+</html>
